@@ -1,0 +1,125 @@
+#!/bin/sh
+set -eu
+
+state_dir="${AGENT_DESKTOP_SESSION_DIR:-$HOME/.agent-desktop-session}"
+env_file="$state_dir/env"
+lock_dir="$state_dir/starting"
+
+mkdir -p "$state_dir"
+chmod 700 "$state_dir"
+
+display_live() {
+  [ -s "$env_file" ] || return 1
+  . "$env_file"
+  xdpyinfo >/dev/null 2>&1
+}
+
+bus_live() {
+  [ -s "$env_file" ] || return 1
+  . "$env_file"
+  dbus-send --session --dest=org.freedesktop.DBus --type=method_call \
+    --print-reply / org.freedesktop.DBus.GetId >/dev/null 2>&1
+}
+
+desktop_ready() {
+  display_live && bus_live
+}
+
+vnc_live() {
+  pgrep -x x11vnc >/dev/null 2>&1
+}
+
+websockify_live() {
+  pgrep -f 'websockify.*6080' >/dev/null 2>&1
+}
+
+start_vnc() {
+  . "$env_file"
+  vnc_live || {
+    x11vnc -display "${DISPLAY:-:99}" -rfbport 5900 -listen 127.0.0.1 \
+      -nopw -forever -shared -bg -o "$state_dir/x11vnc.log" \
+      </dev/null >/dev/null 2>&1
+  }
+  websockify_live || {
+    websockify --web=/usr/share/novnc 6080 127.0.0.1:5900 \
+      </dev/null >"$state_dir/websockify.log" 2>&1 &
+    i=0
+    until curl -fsS http://127.0.0.1:6080/vnc.html >/dev/null 2>&1; do
+      i=$((i + 1))
+      [ "$i" -le 30 ] || break
+      sleep 0.1
+    done
+  }
+}
+
+ensure_vnc() {
+  if vnc_live && websockify_live; then
+    return 0
+  fi
+  vnc_lock_dir="$state_dir/starting-vnc"
+  if mkdir "$vnc_lock_dir" 2>/dev/null; then
+    trap 'rmdir "$vnc_lock_dir" 2>/dev/null || true' EXIT INT TERM
+    start_vnc
+    rmdir "$vnc_lock_dir" 2>/dev/null || true
+    trap - EXIT INT TERM
+  else
+    i=0
+    until vnc_live && websockify_live; do
+      i=$((i + 1))
+      [ "$i" -le 50 ] || break
+      sleep 0.1
+    done
+  fi
+}
+
+start_desktop() {
+  display_live || {
+    rm -f /tmp/.X99-lock
+    export DISPLAY=:99
+    Xvfb :99 -screen 0 1280x800x24 -nolisten tcp </dev/null >/dev/null 2>&1 &
+    i=0
+    until xdpyinfo >/dev/null 2>&1; do
+      i=$((i + 1))
+      [ "$i" -le 50 ] || { echo "agent-desktop-run: Xvfb did not start" >&2; exit 1; }
+      sleep 0.2
+    done
+    openbox </dev/null >/dev/null 2>&1 &
+  }
+  bus_live || {
+    DBUS_SESSION_BUS_ADDRESS=$(dbus-daemon --session --fork --print-address)
+    export DBUS_SESSION_BUS_ADDRESS
+  }
+  printf "export DISPLAY=%s\nexport DBUS_SESSION_BUS_ADDRESS='%s'\n" \
+    "$DISPLAY" "$DBUS_SESSION_BUS_ADDRESS" > "$env_file"
+}
+
+if ! desktop_ready; then
+  if mkdir "$lock_dir" 2>/dev/null; then
+    trap 'rmdir "$lock_dir" 2>/dev/null || true' EXIT INT TERM
+    start_desktop
+    rmdir "$lock_dir"
+    trap - EXIT INT TERM
+  else
+    i=0
+    until desktop_ready; do
+      i=$((i + 1))
+      [ "$i" -le 150 ] || {
+        echo "agent-desktop-run: the desktop session did not start; remove $lock_dir and run again" >&2
+        exit 1
+      }
+      sleep 0.2
+    done
+  fi
+fi
+
+if [ "${1:-}" = "start-vnc" ]; then
+  ensure_vnc
+  exit 0
+fi
+
+if [ "${ENABLE_VNC:-0}" = "1" ]; then
+  ensure_vnc
+fi
+
+. "$env_file"
+exec agent-desktop "$@"

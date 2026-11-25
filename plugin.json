@@ -1,0 +1,18 @@
+{
+  "name": "antigravity-pilot",
+  "displayName": "Antigravity Pilot (Cross-Platform Computer Use)",
+  "version": "1.0.0",
+  "description": "Cross-platform desktop computer use and parallel virtual desktops for Google Antigravity (Windows, macOS & Linux): headless accessibility automation, zero-dependency Set-of-Mark overlays, deterministic Risk-Guard + JSONL audit traces, parameterized recipes, and <1s live noVNC Docker sandboxes — with zero MCP token bloat.",
+  "logo": "assets/logo.svg",
+  "author": {
+    "name": "Aphygo",
+    "url": "https://github.com/Aphygo"
+  },
+  "homepage": "https://github.com/Aphygo/antigravity-pilot",
+  "repository": "https://github.com/Aphygo/antigravity-pilot",
+  "suggestedPrompts": [
+    "Check desktop automation readiness across my OS with pilot_ctl.py doctor and capture a Set-of-Mark --annotate screenshot of my active app",
+    "List my saved desktop recipes with pilot_ctl.py recipe list and run a --dry-run Risk-Guard preview before executing",
+    "Spin up an isolated virtual Linux desktop sandbox with sandbox_ctl.py up desk-1 --vnc and return its live noVNC URL"
+  ]
+}

@@ -1,0 +1,17 @@
+# Compiled local binaries & downloaded sandbox artifacts
+bin/macos-ctl
+sandbox/agent-desktop
+sandbox/agent-desktop-linux-clipboard-owner
+sandbox/*.tar.gz
+sandbox/checksums.txt
+src/.build/
+
+# OS & temporary artifacts
+.DS_Store
+*.png
+/tmp/*
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
